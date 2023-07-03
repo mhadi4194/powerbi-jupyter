@@ -41,12 +41,16 @@ class AuthenticationResult:
         if self._app is None:
             raise RuntimeError('No application found')
 
-        accounts = self._app.get_accounts()
-        if len(accounts) == 0:
-            raise RuntimeError('No accounts found for application')
+        
 
-        token_result = self._app.acquire_token_silent_with_error(
-            scopes=DEFAULT_SCOPES, account=accounts[0], force_refresh=force_refresh)
+        if isinstance(self._app,msal.ConfidentialClientApplication):
+            token_result = self._app.acquire_token_for_client(scopes=DEFAULT_SCOPES)
+        else:
+            accounts = self._app.get_accounts()
+            if len(accounts) == 0 :
+                raise RuntimeError('No accounts found for application')
+            token_result = self._app.acquire_token_silent_with_error(
+                scopes=DEFAULT_SCOPES, account=accounts[0], force_refresh=force_refresh)
 
         if not token_result:
             raise RuntimeError('Failed to get access token')
@@ -57,6 +61,34 @@ class AuthenticationResult:
 
         return token_result.get('access_token')
 
+class ServicePrincipalAuthentication(AuthenticationResult):
+    # Methods
+    def __init__(self, client_id, client_secret, tenant_id):
+        """ Use Azure Service Principal for `Embed for your Client/App owns` the data method
+
+        """
+        super().__init__()
+        self._acquire_access_token_for_client(client_id, client_secret, tenant_id)
+
+    def _acquire_access_token_for_client(self, client_id, client_secret, tenant_id):
+        """ Acquires a token with Service Principal and saves the confidential client application
+        """
+        app = msal.ConfidentialClientApplication(client_id,client_credential=client_secret,authority=AUTHORITY_STR+tenant_id)
+
+        # Ideally you should wait here, in order to save some unnecessary polling
+        result = app.acquire_token_for_client(scopes=DEFAULT_SCOPES)
+        # By default it will block
+        # You can follow this instruction to shorten the block time
+        #    https://msal-python.readthedocs.io/en/latest/#msal.PublicClientApplication.acquire_token_by_device_flow
+        # or you may even turn off the blocking behavior,
+        # and then keep calling acquire_token_by_device_flow(flow) in your own customized loop.
+
+        if "access_token" in result:
+            print("\nService Principal authentication successfully completed.")
+            self._app = app
+        else:
+            error_message = f"Authentication failed. Try again.\nDetails: {result.get('error_description')}"
+            raise RuntimeError(error_message)
 
 class DeviceCodeLoginAuthentication(AuthenticationResult):
 

@@ -7,7 +7,7 @@
 """
 Embeds Power BI Report
 """
-
+print("this is dev version")
 import time
 import requests
 
